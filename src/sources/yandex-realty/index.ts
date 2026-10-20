@@ -1,0 +1,33 @@
+import type { ImportedListing } from '../../shared/protocol'
+import type { SourceAdapter } from '../types'
+import { fetchHtml, sourceErrorFor } from '../http'
+import { extractOffer } from './extract'
+import { YANDEX_REALTY_ADAPTER_VERSION, normalizeYandexRealty } from './normalize'
+
+function parseHtml(html: string, status = 200): ImportedListing {
+  const extracted = extractOffer(html, status)
+  if (extracted.kind !== 'ok') throw sourceErrorFor(extracted.kind)
+  return normalizeYandexRealty(extracted.raw)
+}
+
+export const yandexRealty: SourceAdapter = {
+  id: 'yandex-realty',
+  label: 'Яндекс.Недвижимость',
+  hosts: ['realty.yandex.ru'],
+  version: YANDEX_REALTY_ADAPTER_VERSION,
+  // /offer/1234567890123456789/
+  matchUrl(url) {
+    const m = url.pathname.match(/^\/offer\/(\d+)\/?$/)
+    return m?.[1] ? { sourceId: m[1] } : null
+  },
+
+  parseHtml,
+
+  async load(url) {
+    const target = new URL(url)
+    target.hash = ''
+
+    const { html, status } = await fetchHtml(target)
+    return parseHtml(html, status)
+  },
+}
